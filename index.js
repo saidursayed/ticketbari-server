@@ -2,7 +2,7 @@ const express = require("express");
 const app = express();
 const port = process.env.PORT || 3000;
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const admin = require("firebase-admin");
 
@@ -54,6 +54,7 @@ async function run() {
     await client.connect();
     const db = client.db("ticket-bari");
     const usersCollection = db.collection("users");
+    const ticketsCollection = db.collection("tickets");
 
     app.post("/user", async (req, res) => {
       const user = req.body;
@@ -80,12 +81,21 @@ async function run() {
     });
 
     app.get("/users", verifyJWT, async (req, res) => {
-      const adminEmail = req.verifyJWT;
+      const adminEmail = req.tokenEmail;
       const result = await usersCollection
         .find({ email: { $ne: adminEmail } })
         .toArray();
       res.send(result);
     });
+
+    app.get("/users/:email", async (req, res) => {
+      const email = req.params.email;
+
+      const result = await usersCollection.findOne({ email });
+
+      res.send(result);
+    });
+
 
     app.patch("/update-role", async (req, res) => {
       const { email, role } = req.body;
@@ -93,6 +103,44 @@ async function run() {
         { email },
         { $set: { role } },
       );
+      res.send(result);
+    });
+
+    app.patch("/users/fraud/:id", async (req, res) => {
+      const id = req.params.id;
+
+      const user = await usersCollection.findOne({ _id: new ObjectId(id) });
+
+      // ✅ only vendor can be fraud
+      if (user.role !== "vendor") {
+        return res.status(400).send({
+          message: "Only vendors can be marked as fraud",
+        });
+      }
+
+      const result = await usersCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { isFraud: true } },
+      );
+
+      res.send(result);
+    });
+
+    app.post("/tickets", async (req, res) => {
+      const ticket = req.body;
+      const email = ticket.vendorEmail;
+
+      const user = await usersCollection.findOne({ email });
+      if (user?.isFraud) {
+        return res.status(403).send({
+          message: "You are flagged as fraud, cannot add ticket",
+        });
+      }
+
+      ticket.verificationStatus = "pending";
+      ticket.createdAt = new Date().toISOString();
+
+      const result = await ticketsCollection.insertOne(ticket);
       res.send(result);
     });
 
