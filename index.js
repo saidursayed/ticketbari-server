@@ -96,7 +96,6 @@ async function run() {
       res.send(result);
     });
 
-
     app.patch("/update-role", async (req, res) => {
       const { email, role } = req.body;
       const result = await usersCollection.updateOne(
@@ -143,6 +142,18 @@ async function run() {
       const result = await ticketsCollection.insertOne(ticket);
       res.send(result);
     });
+
+    app.get("/tickets", async (req, res) => {
+      const result = await ticketsCollection
+        .find()
+        .sort({
+          createdAt: -1,
+        })
+        .toArray();
+      res.send(result);
+    });
+
+
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
