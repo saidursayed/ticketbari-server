@@ -79,6 +79,23 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/users", verifyJWT, async (req, res) => {
+      const adminEmail = req.verifyJWT;
+      const result = await usersCollection
+        .find({ email: { $ne: adminEmail } })
+        .toArray();
+      res.send(result);
+    });
+
+    app.patch("/update-role", async (req, res) => {
+      const { email, role } = req.body;
+      const result = await usersCollection.updateOne(
+        { email },
+        { $set: { role } },
+      );
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
