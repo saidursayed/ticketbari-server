@@ -55,6 +55,30 @@ async function run() {
     const db = client.db("ticket-bari");
     const usersCollection = db.collection("users");
 
+    app.post("/user", async (req, res) => {
+      const user = req.body;
+      user.role = "user";
+      user.createdAt = new Date(); //.toISOString()
+      user.last_loggedIn = new Date();
+
+      const query = {
+        email: user.email,
+      };
+
+      const userExists = await usersCollection.findOne(query);
+      if (userExists) {
+        const result = await usersCollection.updateOne(query, {
+          $set: {
+            last_loggedIn: new Date(),
+          },
+        });
+        return res.send(result);
+      }
+
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
