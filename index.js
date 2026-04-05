@@ -153,7 +153,17 @@ async function run() {
       res.send(result);
     });
 
+    app.patch("/tickets/status/:id", async (req, res) => {
+      const id = req.params.id;
+      const { status } = req.body;
 
+      const result = await ticketsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { verificationStatus: status } },
+      );
+
+      res.send(result);
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
