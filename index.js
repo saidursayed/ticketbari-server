@@ -80,6 +80,7 @@ async function run() {
       res.send(result);
     });
 
+    // admin
     app.get("/users", verifyJWT, async (req, res) => {
       const adminEmail = req.tokenEmail;
       const result = await usersCollection
@@ -88,6 +89,7 @@ async function run() {
       res.send(result);
     });
 
+    // admin
     app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
 
@@ -96,6 +98,7 @@ async function run() {
       res.send(result);
     });
 
+    // admin
     app.patch("/update-role", async (req, res) => {
       const { email, role } = req.body;
       const result = await usersCollection.updateOne(
@@ -105,26 +108,36 @@ async function run() {
       res.send(result);
     });
 
+    // admin
     app.patch("/users/fraud/:id", async (req, res) => {
       const id = req.params.id;
-
+      const { isFraud } = req.body;
       const user = await usersCollection.findOne({ _id: new ObjectId(id) });
 
-      // ✅ only vendor can be fraud
       if (user.role !== "vendor") {
         return res.status(400).send({
           message: "Only vendors can be marked as fraud",
         });
       }
 
-      const result = await usersCollection.updateOne(
+      await usersCollection.updateOne(
         { _id: new ObjectId(id) },
-        { $set: { isFraud: true } },
+        { $set: { isFraud } },
       );
 
-      res.send(result);
+      await ticketsCollection.updateMany(
+        { vendorEmail: user.email },
+        { $set: { isHidden: isFraud } },
+      );
+
+      res.send({
+        message: isFraud
+          ? "Vendor marked as fraud"
+          : "Vendor unmarked as fraud",
+      });
     });
 
+    // vendor
     app.post("/tickets", async (req, res) => {
       const ticket = req.body;
       const email = ticket.vendorEmail;
@@ -143,9 +156,10 @@ async function run() {
       res.send(result);
     });
 
+    // admin
     app.get("/tickets", async (req, res) => {
       const result = await ticketsCollection
-        .find()
+        .find({ isHidden: { $ne: true } })
         .sort({
           createdAt: -1,
         })
@@ -153,6 +167,7 @@ async function run() {
       res.send(result);
     });
 
+    // admin
     app.patch("/tickets/status/:id", async (req, res) => {
       const id = req.params.id;
       const { status } = req.body;
@@ -165,11 +180,12 @@ async function run() {
       res.send(result);
     });
 
+    // vendor
     app.get("/tickets/vendor/:email", async (req, res) => {
       const email = req.params.email;
 
       const result = await ticketsCollection
-        .find({ vendorEmail: email, verificationStatus: "approved" })
+        .find({ vendorEmail: email })
         .sort({ createdAt: -1 })
         .toArray();
 
