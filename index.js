@@ -192,6 +192,22 @@ async function run() {
       res.send(result);
     });
 
+    // user
+    app.get("/tickets/latest", async (req, res) => {
+      const query = {
+        verificationStatus: "approved",
+        isHidden: { $ne: true },
+      };
+
+      const latestTickets = await ticketsCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .limit(8)
+        .toArray();
+
+      res.send(latestTickets);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
