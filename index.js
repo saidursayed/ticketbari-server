@@ -157,7 +157,7 @@ async function run() {
     });
 
     // admin
-    app.get("/tickets", async (req, res) => {
+    app.get("/manage-tickets", async (req, res) => {
       const result = await ticketsCollection
         .find({ isHidden: { $ne: true } })
         .sort({
@@ -206,6 +206,20 @@ async function run() {
         .toArray();
 
       res.send(latestTickets);
+    });
+
+    app.get("/all-tickets", async (req, res) => {
+      const query = {
+        verificationStatus: "approved",
+        isHidden: { $ne: true },
+      };
+
+      const allTickets = await ticketsCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.send(allTickets);
     });
 
     // Send a ping to confirm a successful connection
