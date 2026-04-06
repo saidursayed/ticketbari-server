@@ -193,7 +193,7 @@ async function run() {
     });
 
     // user
-    app.get("/tickets/latest", async (req, res) => {
+    app.get("/latest-tickets", async (req, res) => {
       const query = {
         verificationStatus: "approved",
         isHidden: { $ne: true },
@@ -207,7 +207,7 @@ async function run() {
 
       res.send(latestTickets);
     });
-
+    // user
     app.get("/all-tickets", async (req, res) => {
       const query = {
         verificationStatus: "approved",
@@ -220,6 +220,13 @@ async function run() {
         .toArray();
 
       res.send(allTickets);
+    });
+
+    // user
+    app.get("/tickets/:id", async (req, res) => {
+      const { id } = req.params;
+      const ticket = await ticketsCollection.findOne({ _id: new ObjectId(id) });
+      res.send(ticket);
     });
 
     // Send a ping to confirm a successful connection
