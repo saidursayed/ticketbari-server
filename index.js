@@ -55,6 +55,7 @@ async function run() {
     const db = client.db("ticket-bari");
     const usersCollection = db.collection("users");
     const ticketsCollection = db.collection("tickets");
+    const bookingsTicketsCollection = db.collection("bookingsTickets");
 
     app.post("/user", async (req, res) => {
       const user = req.body;
@@ -227,6 +228,48 @@ async function run() {
       const { id } = req.params;
       const ticket = await ticketsCollection.findOne({ _id: new ObjectId(id) });
       res.send(ticket);
+    });
+
+    app.post("/ticket-bookings", async (req, res) => {
+      const bookingData = req.body;
+      const { ticketId, quantity } = bookingData;
+
+      const ticket = await ticketsCollection.findOne({
+        _id: new ObjectId(ticketId),
+      });
+
+      if (!ticket) {
+        return res.send({ message: "Ticket not found" });
+      }
+
+      if (new Date(ticket.departureDateTime) < new Date()) {
+        return res.send({ message: "Ticket expired" });
+      }
+
+      if (ticket.ticketQuantity === 0) {
+        return res.send({ message: "Ticket not available" });
+      }
+
+      if (quantity > ticket.ticketQuantity) {
+        return res.send({ message: "Quantity exceeded" });
+      }
+
+      // secure price
+      const totalPrice = ticket.ticketPrice * quantity;
+
+      const safeBooking = {
+        ...bookingData,
+        unitPrice: ticket.ticketPrice,
+        totalPrice,
+        status: "pending",
+        createdAt: new Date(),
+      };
+
+      console.log(safeBooking);
+
+      const result = await bookingsTicketsCollection.insertOne(safeBooking);
+
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
