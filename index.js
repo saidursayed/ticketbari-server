@@ -131,6 +131,11 @@ async function run() {
         { $set: { isHidden: isFraud } },
       );
 
+      await bookingsTicketsCollection.updateMany(
+        { vendorEmail: user.email },
+        { $set: { status: isFraud ? "cancelled_by_admin" : "pending" } },
+      );
+
       res.send({
         message: isFraud
           ? "Vendor marked as fraud"
@@ -265,13 +270,47 @@ async function run() {
         createdAt: new Date(),
       };
 
-      console.log(safeBooking);
-
       const result = await bookingsTicketsCollection.insertOne(safeBooking);
 
       res.send(result);
     });
 
+    app.get("/bookings/vendor/:email", async (req, res) => {
+      const email = req.params.email;
+
+      const query = { vendorEmail: email };
+
+      const result = await bookingsTicketsCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .toArray();
+      res.send(result);
+    });
+
+    app.patch("/bookings/status/:id", async (req, res) => {
+      const id = req.params.id;
+      const { status } = req.body;
+
+      const booking = await bookingsTicketsCollection.findOne({
+        _id: new ObjectId(id),
+      });
+      
+      if (!booking) {
+        return res.send({ message: "Booking not found" });
+      }
+
+      if (booking.status === "cancelled_by_admin") {
+        return res.send({ message: "Cannot update a cancelled booking" });
+      }
+
+      const result = await bookingsTicketsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: { status },
+        },
+      );
+      res.send(result);
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
