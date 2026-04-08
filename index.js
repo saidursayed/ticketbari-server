@@ -288,27 +288,46 @@ async function run() {
     });
 
     app.patch("/bookings/status/:id", async (req, res) => {
-      const id = req.params.id;
       const { status } = req.body;
+      const id = req.params.id;
 
       const booking = await bookingsTicketsCollection.findOne({
         _id: new ObjectId(id),
       });
-      
+
       if (!booking) {
         return res.send({ message: "Booking not found" });
       }
 
+      if (new Date(booking.departureDateTime) < new Date()) {
+        return res.send({ message: "Booking expired" });
+      }
+
       if (booking.status === "cancelled_by_admin") {
-        return res.send({ message: "Cannot update a cancelled booking" });
+        return res.send({ message: "Already cancelled" });
       }
 
       const result = await bookingsTicketsCollection.updateOne(
         { _id: new ObjectId(id) },
         {
-          $set: { status },
+          $set: {
+            status,
+          },
         },
       );
+
+      res.send({
+        success: true,
+        message: `Booking ${status} successfully`,
+      });
+    });
+
+    app.get("/bookings/user/:email", async (req, res) => {
+      const email = req.params.email;
+      
+      const result = await bookingsTicketsCollection
+        .find({ userEmail: email })
+        .toArray();
       res.send(result);
     });
     // Send a ping to confirm a successful connection
