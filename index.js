@@ -3,9 +3,11 @@ const app = express();
 const port = process.env.PORT || 3000;
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-require("dotenv").config();
-const admin = require("firebase-admin");
 
+require("dotenv").config();
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
+const admin = require("firebase-admin");
 const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
   "utf-8",
 );
@@ -56,6 +58,7 @@ async function run() {
     const usersCollection = db.collection("users");
     const ticketsCollection = db.collection("tickets");
     const bookingsTicketsCollection = db.collection("bookingsTickets");
+    const paymentCollection = db.collection("payments");
 
     app.post("/user", async (req, res) => {
       const user = req.body;
@@ -156,7 +159,7 @@ async function run() {
       }
 
       ticket.verificationStatus = "pending";
-      ticket.createdAt = new Date().toISOString();
+      ticket.createdAt = new Date();
 
       const result = await ticketsCollection.insertOne(ticket);
       res.send(result);
@@ -324,11 +327,120 @@ async function run() {
 
     app.get("/bookings/user/:email", async (req, res) => {
       const email = req.params.email;
-      
+
       const result = await bookingsTicketsCollection
         .find({ userEmail: email })
         .toArray();
       res.send(result);
+    });
+
+    app.post("/payment-checkout-session", async (req, res) => {
+      const paymentInfo = req.body;
+
+      const ticket = await ticketsCollection.findOne({
+        _id: new ObjectId(paymentInfo.ticketId),
+      });
+
+      if (!ticket) {
+        return res.send({ error: "Ticket not found" });
+      }
+
+      const quantity = Number(paymentInfo.quantity);
+
+      const amount = Math.round(ticket.ticketPrice * 100);
+      console.log(quantity, amount);
+
+      if (quantity > ticket.ticketQuantity) {
+        return res.send({ error: "Not enough seats" });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: `Please pay for ${ticket.ticketTitle}`,
+                images: [ticket.ticketImage],
+              },
+              unit_amount: amount,
+            },
+            quantity,
+          },
+        ],
+        customer_email: paymentInfo.userEmail,
+        metadata: {
+          quantity: quantity.toString(),
+          ticketId: ticket._id.toString(),
+          bookingId: paymentInfo.bookingId.toString(),
+        },
+        mode: "payment",
+        success_url: `${process.env.CLIENT_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.CLIENT_DOMAIN}/payment-cancelled`,
+      });
+      // console.log(session);
+      res.send({ url: session.url });
+    });
+
+    app.patch("/payment-success", async (req, res) => {
+      const sessionId = req.query.session_id;
+
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      const paymentTicket = await paymentCollection.findOne({
+        transactionId: session.payment_intent,
+      });
+
+      if (paymentTicket) {
+        return res.send({ message: "already exist" });
+      }
+
+      if (session.payment_status === "paid") {
+        const ticketId = session.metadata.ticketId;
+
+        // const query = { _id: new ObjectId(sessionId.metadata.bookingId) };
+        const query = {
+          _id: new ObjectId(session.metadata.bookingId),
+        };
+        const update = {
+          $set: {
+            status: "paid",
+          },
+        };
+
+        const result = await bookingsTicketsCollection.updateOne(query, update);
+
+        const payment = {
+          amount: session.amount_total / 100,
+          currency: session.currency,
+          customerEmail: session.customer_email,
+          ticketId: ticketId,
+          bookingInd: session.metadata.bookingId,
+          transactionId: session.payment_intent,
+          paymentStatus: session.payment_status,
+          quantity: session.metadata.quantity,
+          paidAt: new Date(),
+        };
+
+        const resultPayment = await paymentCollection.insertOne(payment);
+
+        const qty = Number(session.metadata.quantity);
+        await ticketsCollection.updateOne(
+          {
+            _id: new ObjectId(ticketId),
+          },
+          { $inc: { ticketQuantity: -qty } },
+        );
+
+        // ✅ Send only one response here
+        return res.send({
+          success: true,
+          modifyTicket: result,
+          paymentInfo: resultPayment,
+          transactionId: session.payment_intent,
+          amount: session.amount_total / 100,
+        });
+      }
     });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
