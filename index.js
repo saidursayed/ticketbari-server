@@ -85,7 +85,13 @@ async function run() {
     });
 
     // admin
-    app.get("/users", verifyJWT, async (req, res) => {
+    app.get("/all-users", verifyJWT, async (req, res) => {
+      const adminEmail = req.tokenEmail;
+      const result = await usersCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.get("/manage-users", verifyJWT, async (req, res) => {
       const adminEmail = req.tokenEmail;
       const result = await usersCollection
         .find({ email: { $ne: adminEmail } })
@@ -136,7 +142,7 @@ async function run() {
 
       await bookingsTicketsCollection.updateMany(
         { vendorEmail: user.email },
-        { $set: { status: isFraud ? "cancelled_by_admin" : "pending" } },
+        { $set: { status: "cancelled_by_admin" } },
       );
 
       res.send({
@@ -174,6 +180,47 @@ async function run() {
         })
         .toArray();
       res.send(result);
+    });
+
+    app.get("/tickets/approved", async (req, res) => {
+      const result = await ticketsCollection
+        .find({ verificationStatus: "approved" })
+        .toArray();
+      res.send(result);
+    });
+
+    app.patch("/tickets/advertise/:id", async (req, res) => {
+      const id = req.params.id;
+      const { isAdvertised } = req.body;
+
+      if (isAdvertised === true) {
+        const advertisedCount = await ticketsCollection.countDocuments({
+          isAdvertised: true,
+        });
+
+        if (advertisedCount >= 6) {
+          return res.send({
+            message: "Maximum 6 tickets can be advertised",
+          });
+        }
+      }
+
+      const result = await ticketsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            isAdvertised,
+          },
+        },
+      );
+
+      res.send({
+        success: true,
+        message: isAdvertised
+          ? "Ticket advertised successfully"
+          : "Ticket removed from advertisement",
+        result,
+      });
     });
 
     // admin
@@ -373,6 +420,7 @@ async function run() {
           quantity: quantity.toString(),
           ticketId: ticket._id.toString(),
           bookingId: paymentInfo.bookingId.toString(),
+          ticketTitle: paymentInfo.ticketTitle,
         },
         mode: "payment",
         success_url: `${process.env.CLIENT_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
@@ -419,6 +467,7 @@ async function run() {
           transactionId: session.payment_intent,
           paymentStatus: session.payment_status,
           quantity: session.metadata.quantity,
+          ticketTitle: session.metadata.ticketTitle,
           paidAt: new Date(),
         };
 
@@ -441,6 +490,16 @@ async function run() {
           amount: session.amount_total / 100,
         });
       }
+    });
+
+    app.get("/payments", async (req, res) => {
+      const email = req.query.email;
+      const query = { customerEmail: email };
+      const result = await paymentCollection
+        .find(query)
+        .sort({ paidAt: -1 })
+        .toArray();
+      res.send(result);
     });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
