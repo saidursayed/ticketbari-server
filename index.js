@@ -377,6 +377,7 @@ async function run() {
 
       const result = await bookingsTicketsCollection
         .find({ userEmail: email })
+        .sort({ createdAt: -1 })
         .toArray();
       res.send(result);
     });
@@ -389,7 +390,7 @@ async function run() {
       });
 
       if (!ticket) {
-        return res.send({ error: "Ticket not found" });
+        return res.send({ message: "Ticket not found" });
       }
 
       const quantity = Number(paymentInfo.quantity);
@@ -398,7 +399,7 @@ async function run() {
       console.log(quantity, amount);
 
       if (quantity > ticket.ticketQuantity) {
-        return res.send({ error: "Not enough seats" });
+        return res.send({ message: "Not enough seats" });
       }
 
       const session = await stripe.checkout.sessions.create({
@@ -421,6 +422,7 @@ async function run() {
           ticketId: ticket._id.toString(),
           bookingId: paymentInfo.bookingId.toString(),
           ticketTitle: paymentInfo.ticketTitle,
+          vendorEmail: paymentInfo.vendorEmail,
         },
         mode: "payment",
         success_url: `${process.env.CLIENT_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
@@ -463,11 +465,12 @@ async function run() {
           currency: session.currency,
           customerEmail: session.customer_email,
           ticketId: ticketId,
-          bookingInd: session.metadata.bookingId,
+          bookingId: session.metadata.bookingId,
           transactionId: session.payment_intent,
           paymentStatus: session.payment_status,
           quantity: session.metadata.quantity,
           ticketTitle: session.metadata.ticketTitle,
+          vendorEmail: session.metadata.vendorEmail,
           paidAt: new Date(),
         };
 
@@ -492,6 +495,7 @@ async function run() {
       }
     });
 
+    // user
     app.get("/payments", async (req, res) => {
       const email = req.query.email;
       const query = { customerEmail: email };
@@ -501,6 +505,35 @@ async function run() {
         .toArray();
       res.send(result);
     });
+
+
+    app.get("/vendor/revenue-overview", async (req, res) => {
+      const email = req.query.email;
+
+      const payments = await paymentCollection
+        .find({ vendorEmail: email })
+        .toArray();
+      // payment revenue
+      const totalRevenue = payments.reduce(
+        (sum, item) => sum + (item.amount || 0),
+        0,
+      );
+      // tickets sold
+      const totalTicketsSold = payments.reduce(
+        (sum, item) => sum + (item.quantity || 0),
+        0,
+      );
+
+      // Tickets added (approved)
+      const totalTicketsAdded = await ticketsCollection.countDocuments({
+        vendorEmail: email,
+        verificationStatus: "approved",
+      });
+
+      res.send({ totalRevenue, totalTicketsSold, totalTicketsAdded });
+    });
+
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
