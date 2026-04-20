@@ -223,6 +223,12 @@ async function run() {
       });
     });
 
+    app.get("/advertiseTickets", async (req, res) => {
+      const query = { isAdvertised: true };
+      const result = await ticketsCollection.find(query).toArray();
+      res.send(result);
+    });
+
     // admin
     app.patch("/tickets/status/:id", async (req, res) => {
       const id = req.params.id;
@@ -258,7 +264,7 @@ async function run() {
       const latestTickets = await ticketsCollection
         .find(query)
         .sort({ createdAt: -1 })
-        .limit(8)
+        .limit(9)
         .toArray();
 
       res.send(latestTickets);
@@ -506,7 +512,6 @@ async function run() {
       res.send(result);
     });
 
-
     app.get("/vendor/revenue-overview", async (req, res) => {
       const email = req.query.email;
 
@@ -532,7 +537,6 @@ async function run() {
 
       res.send({ totalRevenue, totalTicketsSold, totalTicketsAdded });
     });
-
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
