@@ -254,6 +254,31 @@ async function run() {
       res.send(result);
     });
 
+    // vendor
+    app.delete("/ticket/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await ticketsCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+      res.send(result);
+    });
+
+    // vendor
+    app.patch("/ticket/:id", async (req, res) => {
+      const id = req.params.id;
+      const ticketData = req.body;
+      const result = await ticketsCollection.updateOne(
+        {
+          _id: new ObjectId(id),
+        },
+        {
+          $set: ticketData,
+        },
+      );
+
+      res.send(result);
+    });
+
     // user
     app.get("/latest-tickets", async (req, res) => {
       const query = {
