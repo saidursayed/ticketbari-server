@@ -296,17 +296,45 @@ async function run() {
     });
     // user
     app.get("/all-tickets", async (req, res) => {
+      const { from, to, type, sort, page = 1, limit = 6 } = req.query;
+
       const query = {
         verificationStatus: "approved",
         isHidden: { $ne: true },
       };
 
-      const allTickets = await ticketsCollection
+      if (from) {
+        query.from = { $regex: from, $options: "i" };
+      }
+      if (to) {
+        query.to = { $regex: to, $options: "i" };
+      }
+
+      if (type) {
+        query.transport = type;
+      }
+
+      let sortOption = { createdAt: -1 };
+      if (sort === "asc") sortOption = { ticketPrice: 1 };
+      if (sort === "desc") sortOption = { ticketPrice: -1 };
+
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const skip = (pageNum - 1) * limitNum;
+
+      const tickets = await ticketsCollection
         .find(query)
-        .sort({ createdAt: -1 })
+        .sort(sortOption)
+        .skip(skip)
+        .limit(limitNum)
         .toArray();
 
-      res.send(allTickets);
+      const total = await ticketsCollection.countDocuments(query);
+
+      res.send({
+        tickets,
+        totalPages: Math.ceil(total / limitNum),
+      });
     });
 
     // user
