@@ -60,6 +60,29 @@ async function run() {
     const bookingsTicketsCollection = db.collection("bookingsTickets");
     const paymentCollection = db.collection("payments");
 
+    // role middlewares
+    const verifyADMIN = async (req, res, next) => {
+      const email = req.tokenEmail;
+      const user = await usersCollection.findOne({ email });
+      if (user?.role !== "admin")
+        return res
+          .status(403)
+          .send({ message: "Admin only Actions!", role: user?.role });
+
+      next();
+    };
+
+    const verifyVENDOR = async (req, res, next) => {
+      const email = req.tokenEmail;
+      const user = await usersCollection.findOne({ email });
+      if (user?.role !== "vendor")
+        return res
+          .status(403)
+          .send({ message: "Vendor only Actions!", role: user?.role });
+
+      next();
+    };
+
     app.post("/user", async (req, res) => {
       const user = req.body;
       user.role = "user";
@@ -85,13 +108,13 @@ async function run() {
     });
 
     // admin
-    app.get("/all-users", verifyJWT, async (req, res) => {
+    app.get("/all-users", verifyJWT, verifyADMIN, async (req, res) => {
       const adminEmail = req.tokenEmail;
       const result = await usersCollection.find().toArray();
       res.send(result);
     });
 
-    app.get("/manage-users", verifyJWT, async (req, res) => {
+    app.get("/manage-users", verifyJWT, verifyADMIN, async (req, res) => {
       const adminEmail = req.tokenEmail;
       const result = await usersCollection
         .find({ email: { $ne: adminEmail } })
@@ -99,8 +122,8 @@ async function run() {
       res.send(result);
     });
 
-    // admin
-    app.get("/users/:email", async (req, res) => {
+    // user vender admin profile endpoint
+    app.get("/users/:email",  async (req, res) => {
       const email = req.params.email;
 
       const result = await usersCollection.findOne({ email });
@@ -109,7 +132,7 @@ async function run() {
     });
 
     // admin
-    app.patch("/update-role", async (req, res) => {
+    app.patch("/update-role", verifyJWT, verifyADMIN, async (req, res) => {
       const { email, role } = req.body;
       const result = await usersCollection.updateOne(
         { email },
@@ -119,7 +142,7 @@ async function run() {
     });
 
     // admin
-    app.patch("/users/fraud/:id", async (req, res) => {
+    app.patch("/users/fraud/:id", verifyJWT, verifyADMIN, async (req, res) => {
       const id = req.params.id;
       const { isFraud } = req.body;
       const user = await usersCollection.findOne({ _id: new ObjectId(id) });
@@ -153,7 +176,7 @@ async function run() {
     });
 
     // vendor
-    app.post("/tickets", async (req, res) => {
+    app.post("/tickets", verifyJWT, verifyVENDOR, async (req, res) => {
       const ticket = req.body;
       const email = ticket.vendorEmail;
 
@@ -172,7 +195,7 @@ async function run() {
     });
 
     // admin
-    app.get("/manage-tickets", async (req, res) => {
+    app.get("/manage-tickets", verifyJWT, verifyADMIN, async (req, res) => {
       const result = await ticketsCollection
         .find({ isHidden: { $ne: true } })
         .sort({
@@ -182,14 +205,14 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/tickets/approved", async (req, res) => {
+    app.get("/tickets/approved", verifyJWT, verifyADMIN, async (req, res) => {
       const result = await ticketsCollection
         .find({ verificationStatus: "approved" })
         .toArray();
       res.send(result);
     });
 
-    app.patch("/tickets/advertise/:id", async (req, res) => {
+    app.patch("/tickets/advertise/:id", verifyJWT, verifyADMIN, async (req, res) => {
       const id = req.params.id;
       const { isAdvertised } = req.body;
 
@@ -223,14 +246,14 @@ async function run() {
       });
     });
 
-    app.get("/advertiseTickets", async (req, res) => {
+    app.get("/advertiseTickets",  async (req, res) => {
       const query = { isAdvertised: true };
       const result = await ticketsCollection.find(query).toArray();
       res.send(result);
     });
 
     // admin
-    app.patch("/tickets/status/:id", async (req, res) => {
+    app.patch("/tickets/status/:id", verifyJWT, verifyADMIN, async (req, res) => {
       const id = req.params.id;
       const { status } = req.body;
 
@@ -243,7 +266,7 @@ async function run() {
     });
 
     // vendor
-    app.get("/tickets/vendor/:email", async (req, res) => {
+    app.get("/tickets/vendor/:email", verifyJWT, verifyVENDOR, async (req, res) => {
       const email = req.params.email;
 
       const result = await ticketsCollection
@@ -255,7 +278,7 @@ async function run() {
     });
 
     // vendor
-    app.delete("/ticket/:id", async (req, res) => {
+    app.delete("/ticket/:id", verifyJWT, verifyVENDOR, async (req, res) => {
       const id = req.params.id;
       const result = await ticketsCollection.deleteOne({
         _id: new ObjectId(id),
@@ -264,7 +287,7 @@ async function run() {
     });
 
     // vendor
-    app.patch("/ticket/:id", async (req, res) => {
+    app.patch("/ticket/:id", verifyJWT, verifyVENDOR, async (req, res) => {
       const id = req.params.id;
       const ticketData = req.body;
       const result = await ticketsCollection.updateOne(
@@ -294,6 +317,7 @@ async function run() {
 
       res.send(latestTickets);
     });
+
     // user
     app.get("/all-tickets", async (req, res) => {
       const { from, to, type, sort, page = 1, limit = 6 } = req.query;
@@ -344,7 +368,7 @@ async function run() {
       res.send(ticket);
     });
 
-    app.post("/ticket-bookings", async (req, res) => {
+    app.post("/ticket-bookings", verifyJWT, async (req, res) => {
       const bookingData = req.body;
       const { ticketId, quantity } = bookingData;
 
@@ -368,7 +392,7 @@ async function run() {
         return res.send({ message: "Quantity exceeded" });
       }
 
-      // secure price
+      
       const totalPrice = ticket.ticketPrice * quantity;
 
       const safeBooking = {
@@ -384,7 +408,8 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/bookings/vendor/:email", async (req, res) => {
+    // vendor
+    app.get("/bookings/vendor/:email", verifyJWT, verifyVENDOR, async (req, res) => {
       const email = req.params.email;
 
       const query = { vendorEmail: email };
@@ -396,7 +421,8 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/bookings/status/:id", async (req, res) => {
+    // vendor
+    app.patch("/bookings/status/:id", verifyJWT, verifyVENDOR, async (req, res) => {
       const { status } = req.body;
       const id = req.params.id;
 
@@ -431,7 +457,8 @@ async function run() {
       });
     });
 
-    app.get("/bookings/user/:email", async (req, res) => {
+    // user
+    app.get("/bookings/user/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
 
       const result = await bookingsTicketsCollection
@@ -441,7 +468,8 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/payment-checkout-session", async (req, res) => {
+    // user
+    app.post("/payment-checkout-session",verifyJWT, async (req, res) => {
       const paymentInfo = req.body;
 
       const ticket = await ticketsCollection.findOne({
@@ -491,7 +519,8 @@ async function run() {
       res.send({ url: session.url });
     });
 
-    app.patch("/payment-success", async (req, res) => {
+    // user
+    app.patch("/payment-success",verifyJWT, async (req, res) => {
       const sessionId = req.query.session_id;
 
       const session = await stripe.checkout.sessions.retrieve(sessionId);
@@ -507,7 +536,6 @@ async function run() {
       if (session.payment_status === "paid") {
         const ticketId = session.metadata.ticketId;
 
-        // const query = { _id: new ObjectId(sessionId.metadata.bookingId) };
         const query = {
           _id: new ObjectId(session.metadata.bookingId),
         };
@@ -543,7 +571,7 @@ async function run() {
           { $inc: { ticketQuantity: -qty } },
         );
 
-        // ✅ Send only one response here
+        
         return res.send({
           success: true,
           modifyTicket: result,
@@ -555,7 +583,7 @@ async function run() {
     });
 
     // user
-    app.get("/payments", async (req, res) => {
+    app.get("/payments",verifyJWT, async (req, res) => {
       const email = req.query.email;
       const query = { customerEmail: email };
       const result = await paymentCollection
@@ -565,7 +593,8 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/vendor/revenue-overview", async (req, res) => {
+    // vendor
+    app.get("/vendor/revenue-overview", verifyJWT, verifyVENDOR, async (req, res) => {
       const email = req.query.email;
 
       const payments = await paymentCollection
