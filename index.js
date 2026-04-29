@@ -29,12 +29,12 @@ app.use(express.json());
 // jwt middlewares
 const verifyJWT = async (req, res, next) => {
   const token = req?.headers?.authorization?.split(" ")[1];
-  console.log(token);
+  // console.log(token);
   if (!token) return res.status(401).send({ message: "Unauthorized Access!" });
   try {
     const decoded = await admin.auth().verifyIdToken(token);
     req.tokenEmail = decoded.email;
-    console.log(decoded);
+    // console.log(decoded);
     next();
   } catch (err) {
     console.log(err);
@@ -123,7 +123,7 @@ async function run() {
     });
 
     // user vender admin profile endpoint
-    app.get("/users/:email",  async (req, res) => {
+    app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
 
       const result = await usersCollection.findOne({ email });
@@ -212,70 +212,85 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/tickets/advertise/:id", verifyJWT, verifyADMIN, async (req, res) => {
-      const id = req.params.id;
-      const { isAdvertised } = req.body;
+    app.patch(
+      "/tickets/advertise/:id",
+      verifyJWT,
+      verifyADMIN,
+      async (req, res) => {
+        const id = req.params.id;
+        const { isAdvertised } = req.body;
 
-      if (isAdvertised === true) {
-        const advertisedCount = await ticketsCollection.countDocuments({
-          isAdvertised: true,
-        });
-
-        if (advertisedCount >= 6) {
-          return res.send({
-            message: "Maximum 6 tickets can be advertised",
+        if (isAdvertised === true) {
+          const advertisedCount = await ticketsCollection.countDocuments({
+            isAdvertised: true,
           });
+
+          if (advertisedCount >= 6) {
+            return res.send({
+              message: "Maximum 6 tickets can be advertised",
+            });
+          }
         }
-      }
 
-      const result = await ticketsCollection.updateOne(
-        { _id: new ObjectId(id) },
-        {
-          $set: {
-            isAdvertised,
+        const result = await ticketsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              isAdvertised,
+            },
           },
-        },
-      );
+        );
 
-      res.send({
-        success: true,
-        message: isAdvertised
-          ? "Ticket advertised successfully"
-          : "Ticket removed from advertisement",
-        result,
-      });
-    });
+        res.send({
+          success: true,
+          message: isAdvertised
+            ? "Ticket advertised successfully"
+            : "Ticket removed from advertisement",
+          result,
+        });
+      },
+    );
 
-    app.get("/advertiseTickets",  async (req, res) => {
+    app.get("/advertiseTickets", async (req, res) => {
       const query = { isAdvertised: true };
       const result = await ticketsCollection.find(query).toArray();
       res.send(result);
     });
 
     // admin
-    app.patch("/tickets/status/:id", verifyJWT, verifyADMIN, async (req, res) => {
-      const id = req.params.id;
-      const { status } = req.body;
+    app.patch(
+      "/tickets/status/:id",
+      verifyJWT,
+      verifyADMIN,
+      async (req, res) => {
+        const id = req.params.id;
+        const { status } = req.body;
 
-      const result = await ticketsCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { verificationStatus: status } },
-      );
+        const result = await ticketsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { verificationStatus: status } },
+        );
 
-      res.send(result);
-    });
+        res.send(result);
+      },
+    );
 
     // vendor
-    app.get("/tickets/vendor/:email", verifyJWT, verifyVENDOR, async (req, res) => {
-      const email = req.params.email;
+    app.get(
+      "/tickets/vendor/:email",
+      verifyJWT,
+      verifyVENDOR,
+      async (req, res) => {
+        const email = req.params.email;
 
-      const result = await ticketsCollection
-        .find({ vendorEmail: email })
-        .sort({ createdAt: -1 })
-        .toArray();
+        const result = await ticketsCollection
+          .find({ vendorEmail: email })
+          .sort({ createdAt: -1 })
+          .toArray();
 
-      res.send(result);
-    });
+        res.send(result);
+      },
+    );
 
     // vendor
     app.delete("/ticket/:id", verifyJWT, verifyVENDOR, async (req, res) => {
@@ -392,7 +407,6 @@ async function run() {
         return res.send({ message: "Quantity exceeded" });
       }
 
-      
       const totalPrice = ticket.ticketPrice * quantity;
 
       const safeBooking = {
@@ -409,53 +423,63 @@ async function run() {
     });
 
     // vendor
-    app.get("/bookings/vendor/:email", verifyJWT, verifyVENDOR, async (req, res) => {
-      const email = req.params.email;
+    app.get(
+      "/bookings/vendor/:email",
+      verifyJWT,
+      verifyVENDOR,
+      async (req, res) => {
+        const email = req.params.email;
 
-      const query = { vendorEmail: email };
+        const query = { vendorEmail: email };
 
-      const result = await bookingsTicketsCollection
-        .find(query)
-        .sort({ createdAt: -1 })
-        .toArray();
-      res.send(result);
-    });
+        const result = await bookingsTicketsCollection
+          .find(query)
+          .sort({ createdAt: -1 })
+          .toArray();
+        res.send(result);
+      },
+    );
 
     // vendor
-    app.patch("/bookings/status/:id", verifyJWT, verifyVENDOR, async (req, res) => {
-      const { status } = req.body;
-      const id = req.params.id;
+    app.patch(
+      "/bookings/status/:id",
+      verifyJWT,
+      verifyVENDOR,
+      async (req, res) => {
+        const { status } = req.body;
+        const id = req.params.id;
 
-      const booking = await bookingsTicketsCollection.findOne({
-        _id: new ObjectId(id),
-      });
+        const booking = await bookingsTicketsCollection.findOne({
+          _id: new ObjectId(id),
+        });
 
-      if (!booking) {
-        return res.send({ message: "Booking not found" });
-      }
+        if (!booking) {
+          return res.send({ message: "Booking not found" });
+        }
 
-      if (new Date(booking.departureDateTime) < new Date()) {
-        return res.send({ message: "Booking expired" });
-      }
+        if (new Date(booking.departureDateTime) < new Date()) {
+          return res.send({ message: "Booking expired" });
+        }
 
-      if (booking.status === "cancelled_by_admin") {
-        return res.send({ message: "Already cancelled" });
-      }
+        if (booking.status === "cancelled_by_admin") {
+          return res.send({ message: "Already cancelled" });
+        }
 
-      const result = await bookingsTicketsCollection.updateOne(
-        { _id: new ObjectId(id) },
-        {
-          $set: {
-            status,
+        const result = await bookingsTicketsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              status,
+            },
           },
-        },
-      );
+        );
 
-      res.send({
-        success: true,
-        message: `Booking ${status} successfully`,
-      });
-    });
+        res.send({
+          success: true,
+          message: `Booking ${status} successfully`,
+        });
+      },
+    );
 
     // user
     app.get("/bookings/user/:email", verifyJWT, async (req, res) => {
@@ -469,7 +493,7 @@ async function run() {
     });
 
     // user
-    app.post("/payment-checkout-session",verifyJWT, async (req, res) => {
+    app.post("/payment-checkout-session", verifyJWT, async (req, res) => {
       const paymentInfo = req.body;
 
       const ticket = await ticketsCollection.findOne({
@@ -520,10 +544,16 @@ async function run() {
     });
 
     // user
-    app.patch("/payment-success",verifyJWT, async (req, res) => {
+    app.patch("/payment-success", async (req, res) => {
       const sessionId = req.query.session_id;
+      console.log("session Id ----------->", sessionId);
+
+      if (!sessionId) {
+        return res.status(400).send({ message: "Session ID missing" });
+      }
 
       const session = await stripe.checkout.sessions.retrieve(sessionId);
+      console.log("Payment  success -------------", session);
 
       const paymentTicket = await paymentCollection.findOne({
         transactionId: session.payment_intent,
@@ -571,7 +601,6 @@ async function run() {
           { $inc: { ticketQuantity: -qty } },
         );
 
-        
         return res.send({
           success: true,
           modifyTicket: result,
@@ -583,7 +612,7 @@ async function run() {
     });
 
     // user
-    app.get("/payments",verifyJWT, async (req, res) => {
+    app.get("/payments", verifyJWT, async (req, res) => {
       const email = req.query.email;
       const query = { customerEmail: email };
       const result = await paymentCollection
@@ -594,31 +623,37 @@ async function run() {
     });
 
     // vendor
-    app.get("/vendor/revenue-overview", verifyJWT, verifyVENDOR, async (req, res) => {
-      const email = req.query.email;
+    app.get(
+      "/vendor/revenue-overview",
+      verifyJWT,
+      verifyVENDOR,
+      async (req, res) => {
+        const email = req.query.email;
 
-      const payments = await paymentCollection
-        .find({ vendorEmail: email })
-        .toArray();
-      // payment revenue
-      const totalRevenue = payments.reduce(
-        (sum, item) => sum + (item.amount || 0),
-        0,
-      );
-      // tickets sold
-      const totalTicketsSold = payments.reduce(
-        (sum, item) => sum + (item.quantity || 0),
-        0,
-      );
+        const payments = await paymentCollection
+          .find({ vendorEmail: email })
+          .toArray();
 
-      // Tickets added (approved)
-      const totalTicketsAdded = await ticketsCollection.countDocuments({
-        vendorEmail: email,
-        verificationStatus: "approved",
-      });
+        // payment revenue
+        const totalRevenue = payments.reduce(
+          (sum, item) => sum + (item.amount || 0),
+          0,
+        );
+        // tickets sold
+        const totalTicketsSold = payments.reduce(
+          (sum, item) => sum + Number(item.quantity),
+          0,
+        );
 
-      res.send({ totalRevenue, totalTicketsSold, totalTicketsAdded });
-    });
+        // Tickets added (approved)
+        const totalTicketsAdded = await ticketsCollection.countDocuments({
+          vendorEmail: email,
+          verificationStatus: "approved",
+        });
+
+        res.send({ totalRevenue, totalTicketsSold, totalTicketsAdded });
+      },
+    );
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
