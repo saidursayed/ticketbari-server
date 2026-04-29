@@ -208,6 +208,7 @@ async function run() {
     app.get("/tickets/approved", verifyJWT, verifyADMIN, async (req, res) => {
       const result = await ticketsCollection
         .find({ verificationStatus: "approved" })
+        .sort({ createdAt: -1 })
         .toArray();
       res.send(result);
     });
@@ -671,6 +672,4 @@ app.get("/", (req, res) => {
   res.send("Server is running 🚀");
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+module.exports = app;
