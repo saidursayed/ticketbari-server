@@ -123,7 +123,7 @@ async function run() {
     });
 
     // user vender admin profile endpoint
-    app.get("/users/:email", async (req, res) => {
+    app.get("/users/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
 
       const result = await usersCollection.findOne({ email });
